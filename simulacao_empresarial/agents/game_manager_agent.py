@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain_openai import ChatOpenAI
 from langchain.agents.agent_types import AgentType
@@ -5,24 +7,32 @@ import pandas as pd
 from .accountant_agent import AccountantAgent
 from .economy_agent import EconomyAgent
 from .competitor_agent import CompetitorAgent
+import ast
+
+# Carrega as variáveis de ambiente do arquivo .env
+load_dotenv()
 
 class GameManagerAgent:
     def __init__(self):
+        # Verifica se a chave da API está definida
+        if not os.getenv("OPENAI_API_KEY"):
+            raise ValueError("A chave da API da OpenAI não está definida. Por favor, configure a variável de ambiente OPENAI_API_KEY.")
+        
         self.economy_agent = EconomyAgent()
         self.competitor_agent = CompetitorAgent()
         self.accountant = AccountantAgent()
-        self.initialize_game_state()
-        self.df = pd.DataFrame(columns=['quarter', 'economy', 'competitors', 'financials', 'analysis', 'decisions'])
-        self.agent = self.create_agent()
+        self.factory_capacity = 3000  # Defina um valor padrão para a capacidade da fábrica
+        self.df = pd.DataFrame()
+        self.initial_state()
 
     def create_agent(self):
         return create_pandas_dataframe_agent(
-            ChatOpenAI(temperature=0, model="gpt-3.5-turbo"),
+            ChatOpenAI(temperature=0, model="gpt-4o-mini"),
             self.df,
             verbose=True,
             agent_type=AgentType.OPENAI_FUNCTIONS,
             prefix="Você é um analista de negócios experiente. Analise os dados do jogo e forneça insights.",
-            allow_dangerous_code=True  # Adicionando este parâmetro
+            allow_dangerous_code=True
         )
 
     def initialize_game_state(self):
@@ -49,65 +59,87 @@ class GameManagerAgent:
             
             # Gerar relatórios financeiros
             financial_reports = self.accountant.generate_financial_statements()
+            
+            # Gerar análise financeira
             financial_analysis = self.accountant.analyze_financial_position()
             
-            # Adicionar nova linha ao DataFrame
-            new_row = pd.DataFrame({
-                'quarter': [current_quarter],
-                'economy': [economy_data],
-                'competitors': [competitors_data],
-                'financials': [financial_reports],
-                'analysis': [financial_analysis],
-                'decisions': [str(player_decisions)]
+            # Atualizar o estado do jogo
+            self.game_state.update({
+                'economy': economy_data,
+                'competitors': competitors_data,
+                'financials': financial_reports,
+                'analysis': financial_analysis
             })
+            
+            # Atualizar o DataFrame
+            new_row = pd.DataFrame([self.game_state])
             self.df = pd.concat([self.df, new_row], ignore_index=True)
             
-            # Executar o agente para análise e recomendações
-            query = f"Analise os dados do trimestre {current_quarter}, incluindo os relatórios financeiros detalhados e a análise financeira, e forneça um resumo da situação atual e recomendações para o próximo trimestre."
-            result = self.agent.run(query)
+            # Imprimir o razão contábil para debug
+            self.accountant.print_ledger()
             
-            return result
+            return self.game_state
         except Exception as e:
             print(f"Erro ao executar o jogo: {e}")
             return f"Desculpe, ocorreu um erro ao executar o jogo: {str(e)}"
 
     def process_player_decisions(self, player_decisions, current_quarter):
-        date = f"Q{current_quarter}"
-        
-        # Calcular produção real (limitada pela capacidade da fábrica)
-        production = min(player_decisions['production'], self.game_state['factory_capacity'])
-        
-        # Calcular vendas (simplificação: assumindo que todas as unidades produzidas são vendidas)
-        sales_units = production
-        sales_revenue = sales_units * player_decisions['price']
-        
-        # Registrar transações
-        self.accountant.record_transaction(date, 'Sales', 0, sales_revenue, 'Revenue from sales')
-        self.accountant.record_transaction(date, 'Cash', sales_revenue, 0, 'Cash from sales')
-        
-        # Custos de produção
-        production_cost = production * self.game_state['production_cost_per_unit']
-        self.accountant.record_transaction(date, 'COGS', production_cost, 0, 'Cost of goods sold')
-        self.accountant.record_transaction(date, 'Cash', 0, production_cost, 'Payment for production costs')
-        
-        # Despesas de marketing
-        self.accountant.record_transaction(date, 'Marketing Expense', player_decisions['marketing'], 0, 'Marketing expenses')
-        self.accountant.record_transaction(date, 'Cash', 0, player_decisions['marketing'], 'Payment for marketing')
-        
-        # Investimentos em P&D
-        self.accountant.record_transaction(date, 'R&D Expense', player_decisions['research'], 0, 'R&D expenses')
-        self.accountant.record_transaction(date, 'Cash', 0, player_decisions['research'], 'Payment for R&D')
-        
-        # Investimentos em capacidade
-        if player_decisions['capacity_investment'] > 0:
-            self.accountant.record_transaction(date, 'Property, Plant & Equipment', player_decisions['capacity_investment'], 0, 'Investment in capacity')
-            self.accountant.record_transaction(date, 'Cash', 0, player_decisions['capacity_investment'], 'Payment for capacity investment')
-            self.game_state['factory_capacity'] += player_decisions['capacity_investment'] // 100  # Assumindo que cada 100 unidades de investimento aumentam a capacidade em 1 unidade
-        
-        # Doações
-        if player_decisions['donations'] > 0:
-            self.accountant.record_transaction(date, 'Charitable Donations', player_decisions['donations'], 0, 'Charitable donations')
-            self.accountant.record_transaction(date, 'Cash', 0, player_decisions['donations'], 'Payment for donations')
-        
-        # Atualizar o estado do jogo
-        self.game_state['production_cost_per_unit'] = max(8, self.game_state['production_cost_per_unit'] - 0.1)  # Redução de custo com a experiência, mínimo de 8
+        try:
+            # Produção
+            production = min(player_decisions.get('production', 0), self.factory_capacity)
+            production_cost = production * 10  # Assumindo um custo de 10 por unidade
+
+            # Contabilizar custo de produção
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Inventory', production_cost, 0, 'Production added to inventory')
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Cash', 0, production_cost, 'Payment for production costs')
+
+            # Vendas
+            sales_price = player_decisions.get('price', 0)
+            marketing_expense = player_decisions.get('marketing', 0)
+            sales = production  # Assumindo que todas as unidades produzidas são vendidas
+
+            sales_revenue = sales * sales_price
+
+            # Contabilizar receita de vendas
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Cash', sales_revenue, 0, 'Cash from sales')
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Sales', 0, sales_revenue, 'Revenue from sales')
+
+            # Contabilizar custo das mercadorias vendidas (COGS)
+            self.accountant.record_transaction(f'Q{current_quarter}', 'COGS', production_cost, 0, 'Cost of goods sold')
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Inventory', 0, production_cost, 'Reduction in inventory due to sales')
+
+            # Contabilizar despesas de marketing
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Marketing', marketing_expense, 0, 'Marketing expenses')
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Cash', 0, marketing_expense, 'Payment for marketing')
+
+            # Outras decisões do jogador (R&D, doações, etc.)
+            rd_expense = player_decisions.get('research_development', 0)
+            donations = player_decisions.get('charitable_giving', 0)
+
+            self.accountant.record_transaction(f'Q{current_quarter}', 'R&D', rd_expense, 0, 'R&D expenses')
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Cash', 0, rd_expense, 'Payment for R&D')
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Donations', donations, 0, 'Charitable donations')
+            self.accountant.record_transaction(f'Q{current_quarter}', 'Cash', 0, donations, 'Payment for donations')
+
+        except Exception as e:
+            print(f"Erro ao processar decisões do jogador: {e}")
+
+    def initial_state(self):
+        self.game_state = {
+            'quarter': 0,
+            'financials': self.accountant.generate_financial_statements(),
+        }
+        self.accountant.print_ledger()  # Imprime o razão contábil para debug
+
+    def get_last_financial_reports(self):
+        if not self.df.empty:
+            last_financials = self.df.iloc[-1]['financials']
+            if isinstance(last_financials, str):
+                # Se for uma string, tenta converter para dicionário
+                try:
+                    return ast.literal_eval(last_financials)
+                except:
+                    print("Erro ao converter relatórios financeiros de string para dicionário")
+                    return {}
+            return last_financials
+        return {}
