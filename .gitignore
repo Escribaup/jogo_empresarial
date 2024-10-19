@@ -1,0 +1,36 @@
+# Ignorar a pasta de ambiente virtual
+.venv/
+
+# Ignorar a pasta de ambiente virtual
+Aplicativo/
+
+# Ignorar a pasta de ambiente virtual
+BKP/
+
+# Ignorar arquivos de cache Python
+__pycache__/
+*.pyc
+
+# Ignorar arquivos de configuração local
+.env
+
+# Ignorar arquivos de log
+*.log
+
+# Ignorar arquivos temporários
+*.tmp
+
+# Ignorar a pasta de build
+build/
+
+# Ignorar a pasta de distribuição
+dist/
+
+# Ignorar arquivos de IDE específicos
+.vscode/
+.idea/
+
+# Ignorar arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+
