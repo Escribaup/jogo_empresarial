@@ -1,0 +1,1 @@
+# Definição de cenários econômicos

@@ -1,0 +1,1 @@
+# Funções auxiliares para uso geral

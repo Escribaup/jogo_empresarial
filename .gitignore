@@ -1,12 +1,6 @@
 # Ignorar a pasta de ambiente virtual
 .venv/
 
-# Ignorar a pasta de ambiente virtual
-Aplicativo/
-
-# Ignorar a pasta de ambiente virtual
-BKP/
-
 # Ignorar arquivos de cache Python
 __pycache__/
 *.pyc

@@ -1,0 +1,1 @@
+# IA para gerar notícias sobre o contexto do jogo

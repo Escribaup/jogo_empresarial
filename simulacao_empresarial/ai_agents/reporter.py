@@ -1,0 +1,1 @@
+# IA para compilar relatórios de desempenho do jogador

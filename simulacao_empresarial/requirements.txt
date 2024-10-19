@@ -1,0 +1,9 @@
+langchain==0.3.4
+langchain-community
+openai
+python-dotenv
+streamlit
+numpy==1.22.4
+pandas==1.5.3
+plotly==5.14.1
+

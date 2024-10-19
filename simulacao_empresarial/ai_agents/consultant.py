@@ -1,0 +1,1 @@
+# IA para dar conselhos aos jogadores
